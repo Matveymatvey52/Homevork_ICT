@@ -1,0 +1,5 @@
+build/
+*.o
+*.out
+high_scores.txt
+.DS_Store
