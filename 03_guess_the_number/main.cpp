@@ -61,10 +61,12 @@ int main(int argc, char** argv) {
         ++attempts_count; // засчитываем очередную попытку
 
         if (current_guess < target_value) {
-            std::cout << "less than " << current_guess << std::endl;
+            // Твоё число меньше загаданного — значит загаданное больше.
+            std::cout << "загаданное число больше, чем " << current_guess << std::endl;
         }
         else if (current_guess > target_value) {
-            std::cout << "greater than " << current_guess << std::endl;
+            // Твоё число больше загаданного — значит загаданное меньше.
+            std::cout << "загаданное число меньше, чем " << current_guess << std::endl;
         }
         else {
             // Число угадано — выходим из цикла.
