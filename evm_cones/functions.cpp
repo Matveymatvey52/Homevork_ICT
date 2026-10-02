@@ -176,6 +176,7 @@ void writeGnuplotScript(const std::string& scriptFilename,
                          const Field& field) {
     std::ofstream out(scriptFilename);
 
+    out << "reset\n"; // сбросить настройки, оставшиеся от прошлого скрипта
     out << "set terminal png size 900,700\n";
     out << "set output '" << imageFilename << "'\n";
     out << "set title 'Конусы на плоскости'\n";
@@ -291,6 +292,7 @@ void writePointsScript(const std::string& scriptFilename,
                        const std::string& title,
                        const Field& field) {
     std::ofstream out(scriptFilename);
+    out << "reset\n"; // сбросить настройки, оставшиеся от прошлого скрипта
     out << "set terminal png size 900,900\n";
     out << "set output '" << imageFilename << "'\n";
     out << "set title '" << title << "'\n";
@@ -516,6 +518,7 @@ void writeHistogram(const std::vector<int>& hist, float maxLen,
     }
 
     std::ofstream out(scriptFilename);
+    out << "reset\n"; // сбросить настройки, оставшиеся от прошлого скрипта
     out << "set terminal png size 900,600\n";
     out << "set output '" << imageFilename << "'\n";
     out << "set title 'Гистограмма длин рёбер покрывающего дерева'\n";
