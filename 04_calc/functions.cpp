@@ -50,7 +50,7 @@ Lexer::Token Lexer::next_token() {
                 state_ = State::End;
                 return Token::Number;
             }
-            if (std::isdigit(static_cast<unsigned char>(ch_))) {
+            if (std::isdigit(ch_)) {
                 number_ = 10 * number_ + (ch_ - '0'); // дописываем цифру справа
                 next_char();
                 break;
@@ -63,7 +63,7 @@ Lexer::Token Lexer::next_token() {
                 state_ = State::End;
                 return Token::Name;
             }
-            if (std::isalnum(static_cast<unsigned char>(ch_))) {
+            if (std::isalnum(ch_)) {
                 name_ += ch_;
                 next_char();
                 break;
@@ -76,7 +76,7 @@ Lexer::Token Lexer::next_token() {
                 state_ = State::End;
                 return Token::End;
             }
-            if (std::isspace(static_cast<unsigned char>(ch_))) {
+            if (std::isspace(ch_)) {
                 next_char();
                 break;
             }
@@ -93,13 +93,13 @@ Lexer::Token Lexer::next_token() {
                 next_char();
                 return Token::Rbrace;
             }
-            if (std::isdigit(static_cast<unsigned char>(ch_))) {
+            if (std::isdigit(ch_)) {
                 number_ = ch_ - '0';
                 state_ = State::ReadNumber;
                 next_char();
                 break;
             }
-            if (std::isalpha(static_cast<unsigned char>(ch_))) {
+            if (std::isalpha(ch_)) {
                 name_ = ch_;
                 state_ = State::ReadName;
                 next_char();
@@ -177,9 +177,7 @@ Div::Div(ASTNode* lhs, ASTNode* rhs) : ASTNode("/", lhs, rhs) {
 
 // --- Parser ---
 
-using Token = Lexer::Token;
-
-Parser::Parser(Lexer& lexer) : lexer_(lexer), tok_(Token::End) {
+Parser::Parser(Lexer& lexer) : lexer_(lexer), tok_(Lexer::Token::End) {
 }
 
 std::string Parser::error() const {
@@ -192,7 +190,7 @@ void Parser::next_token() {
 
 ASTNode* Parser::parse() {
     ASTNode* root = expr();
-    if (root && tok_ != Token::End) {
+    if (root && tok_ != Lexer::Token::End) {
         // Выражение разобрано, а в строке что-то осталось: "12 43", "a b".
         error_ = "лишние символы после выражения";
         delete root;
@@ -204,7 +202,7 @@ ASTNode* Parser::parse() {
 // Сложение и вычитание.
 ASTNode* Parser::expr() {
     ASTNode* root = term();
-    while (root && tok_ == Token::Operator) {
+    while (root && tok_ == Lexer::Token::Operator) {
         char op = lexer_.get_operator().front();
         if (op != '+' && op != '-') {
             break;
@@ -226,7 +224,7 @@ ASTNode* Parser::expr() {
 // Умножение и деление.
 ASTNode* Parser::term() {
     ASTNode* root = prim();
-    while (root && tok_ == Token::Operator) {
+    while (root && tok_ == Lexer::Token::Operator) {
         char op = lexer_.get_operator().front();
         if (op != '*' && op != '/') {
             break;
@@ -250,24 +248,24 @@ ASTNode* Parser::prim() {
     next_token();
     ASTNode* node = nullptr;
     switch (tok_) {
-    case Token::Number:
+    case Lexer::Token::Number:
         node = new Number(lexer_.get_number());
         break;
-    case Token::Name:
+    case Lexer::Token::Name:
         node = new Variable(lexer_.get_name());
         break;
-    case Token::Lbrace:
+    case Lexer::Token::Lbrace:
         node = expr();
         if (!node) {
             return nullptr;
         }
-        if (tok_ != Token::Rbrace) {
+        if (tok_ != Lexer::Token::Rbrace) {
             error_ = "нет закрывающей скобки";
             delete node;
             return nullptr;
         }
         break;
-    case Token::Unknown:
+    case Lexer::Token::Unknown:
         error_ = "недопустимый символ";
         return nullptr;
     default:

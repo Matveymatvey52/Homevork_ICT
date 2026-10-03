@@ -6,7 +6,6 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-#include <limits>
 
 // --- Point ---
 
@@ -52,7 +51,7 @@ void Circle::setRadius(float radius) {
 
 float Circle::area() const {
     // Площадь круга: S = pi * r^2.
-    return static_cast<float>(M_PI) * radius_ * radius_;
+    return M_PI * radius_ * radius_;
 }
 
 // --- Cone ---
@@ -75,7 +74,7 @@ void Cone::setHeight(float height) {
 float Cone::volume() const {
     // Объём конуса: V = (1/3) * pi * r^2 * h.
     float r = getRadius(); // унаследовано от Circle
-    return (1.0f / 3.0f) * static_cast<float>(M_PI) * r * r * height_;
+    return M_PI * r * r * height_ / 3.0f;
 }
 
 // --- Field ---
@@ -107,7 +106,6 @@ float Field::getMaxY() const {
 
 bool loadConesFromFile(const std::string& filename, std::list<Cone>& coneList) {
     std::ifstream file(filename);
-
     if (!file.is_open()) {
         std::cerr << "Не удалось открыть файл: " << filename << std::endl;
         return false;
@@ -125,108 +123,41 @@ bool loadConesFromFile(const std::string& filename, std::list<Cone>& coneList) {
             std::cerr << "Ошибка чтения конуса номер " << i << std::endl;
             return false;
         }
-
-        coneList.push_back(Cone(x, y, r, h)); // добавляем в конец списка STL
+        coneList.push_back(Cone(x, y, r, h)); // добавляем в конец списка
     }
-
     return true;
 }
 
-// --- Визуализация конусов через gnuplot ---
+// --- Сетка квадратов ---
 
-namespace {
-// Число точек, которыми аппроксимируется окружность основания конуса.
-const int CIRCLE_POINTS = 40;
-}
-
-void writeConeDataFile(const std::list<Cone>& coneList, const std::string& dataFilename) {
-    std::ofstream out(dataFilename);
-
-    for (const Cone& cone : coneList) {
-        float cx = cone.getX();
-        float cy = cone.getY();
-        float r = cone.getRadius();
-        float h = cone.getHeight();
-
-        // Точки окружности основания (z = 0): угол пробегает полный круг.
-        for (int i = 0; i <= CIRCLE_POINTS; ++i) {
-            float angle = 2.0f * static_cast<float>(M_PI) * i / CIRCLE_POINTS;
-            float px = cx + r * std::cos(angle);
-            float py = cy + r * std::sin(angle);
-            out << px << " " << py << " " << 0.0f << "\n";
-        }
-
-        out << "\n"; // пустая строка - разделитель блоков для gnuplot
-
-        // Боковые линии от основания к вершине, через одну точку из четырёх.
-        for (int i = 0; i <= CIRCLE_POINTS; i += 4) {
-            float angle = 2.0f * static_cast<float>(M_PI) * i / CIRCLE_POINTS;
-            float px = cx + r * std::cos(angle);
-            float py = cy + r * std::sin(angle);
-            out << px << " " << py << " " << 0.0f << "\n";
-            out << cx << " " << cy << " " << h << "\n";
-            out << "\n";
-        }
+int squareX(float x) {
+    int s = (int)std::floor((x - FIELD_MIN) / SQUARE);
+    // Точки за краем поля относим к крайнему квадрату.
+    if (s < 0) {
+        s = 0;
     }
+    if (s > GRID_N - 1) {
+        s = GRID_N - 1;
+    }
+    return s;
 }
 
-void writeGnuplotScript(const std::string& scriptFilename,
-                         const std::string& dataFilename,
-                         const std::string& imageFilename,
-                         const Field& field) {
-    std::ofstream out(scriptFilename);
-
-    out << "reset\n"; // сбросить настройки, оставшиеся от прошлого скрипта
-    out << "set terminal png size 900,700\n";
-    out << "set output '" << imageFilename << "'\n";
-    out << "set title 'Конусы на плоскости'\n";
-    out << "set xlabel 'x'\n";
-    out << "set ylabel 'y'\n";
-    out << "set zlabel 'h'\n";
-    out << "set xrange [" << field.getMinX() << ":" << field.getMaxX() << "]\n";
-    out << "set yrange [" << field.getMinY() << ":" << field.getMaxY() << "]\n";
-    out << "set view 60, 30\n";
-    out << "splot '" << dataFilename << "' with lines notitle\n";
+int squareY(float y) {
+    int s = (int)std::floor((y - FIELD_MIN) / SQUARE);
+    if (s < 0) {
+        s = 0;
+    }
+    if (s > GRID_N - 1) {
+        s = GRID_N - 1;
+    }
+    return s;
 }
 
-// --- Grid ---
-
-Grid::Grid(const Field& field, int n)
-    : minX_(field.getMinX()), minY_(field.getMinY()),
-      stepX_((field.getMaxX() - field.getMinX()) / n),
-      stepY_((field.getMaxY() - field.getMinY()) / n), n_(n) {
-}
-
-int Grid::getN() const {
-    return n_;
-}
-
-float Grid::getStep() const {
-    return stepX_;
-}
-
-// Точки за краем поля прижимаем к крайнему квадрату.
-int Grid::squareX(float x) const {
-    int s = static_cast<int>(std::floor((x - minX_) / stepX_));
-    return std::clamp(s, 0, n_ - 1);
-}
-
-int Grid::squareY(float y) const {
-    int s = static_cast<int>(std::floor((y - minY_) / stepY_));
-    return std::clamp(s, 0, n_ - 1);
-}
-
-void sortConesBySquares(std::list<Cone>& coneList, const Grid& grid) {
-    // У std::list свой метод sort: обычный std::sort для списка не
-    // подходит, ему нужен произвольный доступ по индексу.
-    coneList.sort([&grid](const Cone& a, const Cone& b) {
-        int ay = grid.squareY(a.getY());
-        int by = grid.squareY(b.getY());
-        if (ay != by) {
-            return ay < by;
-        }
-        return grid.squareX(a.getX()) < grid.squareX(b.getX());
-    });
+bool coneLess(const Cone& a, const Cone& b) {
+    if (squareY(a.getY()) != squareY(b.getY())) {
+        return squareY(a.getY()) < squareY(b.getY());
+    }
+    return squareX(a.getX()) < squareX(b.getX());
 }
 
 // --- Вторичные точки ---
@@ -236,20 +167,20 @@ float coneSigma(const Cone& cone, float hMin) {
 }
 
 std::vector<GPoint> generateGaussPoints(const std::list<Cone>& coneList,
-                                        int perCone, std::mt19937& gen,
-                                        const Grid& grid) {
-    float hMin = std::numeric_limits<float>::max();
+                                        int perCone, std::mt19937& gen) {
+    // Ищем высоту самого низкого конуса.
+    float hMin = coneList.front().getHeight();
     for (const Cone& cone : coneList) {
-        hMin = std::min(hMin, cone.getHeight());
+        if (cone.getHeight() < hMin) {
+            hMin = cone.getHeight();
+        }
     }
 
     std::vector<GPoint> points;
-    points.reserve(coneList.size() * perCone);
-
     int coneIndex = 0;
     for (const Cone& cone : coneList) {
         float sigma = coneSigma(cone, hMin);
-        // x и y независимы: связь между ними нулевая, облако круглое.
+        // x и y генерируем независимо - облако получается круглым.
         std::normal_distribution<float> distX(cone.getX(), sigma);
         std::normal_distribution<float> distY(cone.getY(), sigma);
 
@@ -257,8 +188,8 @@ std::vector<GPoint> generateGaussPoints(const std::list<Cone>& coneList,
             GPoint p;
             p.x = distX(gen);
             p.y = distY(gen);
-            p.s1 = grid.squareX(p.x);
-            p.s2 = grid.squareY(p.y);
+            p.s1 = squareX(p.x);
+            p.s2 = squareY(p.y);
             p.cone = coneIndex;
             points.push_back(p);
         }
@@ -267,21 +198,18 @@ std::vector<GPoint> generateGaussPoints(const std::list<Cone>& coneList,
     return points;
 }
 
-void sortPointsBySquares(std::vector<GPoint>& points) {
-    std::sort(points.begin(), points.end(),
-              [](const GPoint& a, const GPoint& b) {
-                  if (a.s2 != b.s2) {
-                      return a.s2 < b.s2;
-                  }
-                  return a.s1 < b.s1;
-              });
+bool pointLess(const GPoint& a, const GPoint& b) {
+    if (a.s2 != b.s2) {
+        return a.s2 < b.s2;
+    }
+    return a.s1 < b.s1;
 }
 
 void writePointsFile(const std::vector<GPoint>& points,
                      const std::vector<int>& labels,
                      const std::string& filename) {
     std::ofstream out(filename);
-    for (size_t i = 0; i < points.size(); ++i) {
+    for (int i = 0; i < (int)points.size(); ++i) {
         out << points[i].x << " " << points[i].y << " " << labels[i] << "\n";
     }
 }
@@ -310,16 +238,19 @@ void writePointsScript(const std::string& scriptFilename,
 // --- Кластеры ---
 
 void computeClusterStats(Cluster& cl, const std::vector<GPoint>& points) {
-    cl.minX = cl.minY = std::numeric_limits<float>::max();
-    cl.maxX = cl.maxY = -std::numeric_limits<float>::max();
+    // Начальные значения - координаты первой точки кластера.
+    const GPoint& first = points[cl.points[0]];
+    cl.minX = cl.maxX = first.x;
+    cl.minY = cl.maxY = first.y;
+
     float sumX = 0.0f;
     float sumY = 0.0f;
     for (int idx : cl.points) {
         const GPoint& p = points[idx];
-        cl.minX = std::min(cl.minX, p.x);
-        cl.maxX = std::max(cl.maxX, p.x);
-        cl.minY = std::min(cl.minY, p.y);
-        cl.maxY = std::max(cl.maxY, p.y);
+        if (p.x < cl.minX) cl.minX = p.x;
+        if (p.x > cl.maxX) cl.maxX = p.x;
+        if (p.y < cl.minY) cl.minY = p.y;
+        if (p.y > cl.maxY) cl.maxY = p.y;
         sumX += p.x;
         sumY += p.y;
     }
@@ -327,56 +258,47 @@ void computeClusterStats(Cluster& cl, const std::vector<GPoint>& points) {
     cl.cy = sumY / cl.points.size();
 }
 
-std::vector<int> clusterLabels(const std::vector<Cluster>& clusters, size_t n) {
+bool biggerCluster(const Cluster& a, const Cluster& b) {
+    return a.points.size() > b.points.size();
+}
+
+std::vector<int> clusterLabels(const std::vector<Cluster>& clusters, int n) {
     std::vector<int> labels(n, 0);
-    for (size_t k = 0; k < clusters.size(); ++k) {
+    for (int k = 0; k < (int)clusters.size(); ++k) {
         for (int idx : clusters[k].points) {
-            labels[idx] = static_cast<int>(k);
+            labels[idx] = k;
         }
     }
     return labels;
 }
 
-// Сортируем кластеры по убыванию размера: крупные идут первыми.
-static void sortClustersBySize(std::vector<Cluster>& clusters) {
-    std::sort(clusters.begin(), clusters.end(),
-              [](const Cluster& a, const Cluster& b) {
-                  return a.points.size() > b.points.size();
-              });
-}
-
 // --- Алгоритм "Волна" ---
 
 std::vector<char> buildIncidenceMatrix(const std::vector<GPoint>& points,
-                                       const Grid& grid, float threshold) {
-    const int n = static_cast<int>(points.size());
-    const int g = grid.getN();
-    std::vector<char> matrix(static_cast<size_t>(n) * n, 0);
+                                       float threshold) {
+    int n = points.size();
+    std::vector<char> matrix(n * n, 0);
 
     // Раскладываем номера точек по квадратам сетки.
-    std::vector<std::vector<int>> cells(static_cast<size_t>(g) * g);
+    std::vector<std::vector<int>> cells(GRID_N * GRID_N);
     for (int i = 0; i < n; ++i) {
-        cells[points[i].s2 * g + points[i].s1].push_back(i);
+        cells[points[i].s2 * GRID_N + points[i].s1].push_back(i);
     }
 
-    // Для каждой точки проверяем только 9 квадратов: свой и 8 соседних.
-    const float t2 = threshold * threshold;
+    // Для каждой точки смотрим только 9 квадратов: свой и 8 соседних.
     for (int i = 0; i < n; ++i) {
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
                 int sx = points[i].s1 + dx;
                 int sy = points[i].s2 + dy;
-                if (sx < 0 || sy < 0 || sx >= g || sy >= g) {
-                    continue;
+                if (sx < 0 || sy < 0 || sx >= GRID_N || sy >= GRID_N) {
+                    continue; // такого квадрата нет - вышли за поле
                 }
-                for (int j : cells[sy * g + sx]) {
-                    if (j == i) {
-                        continue;
-                    }
+                for (int j : cells[sy * GRID_N + sx]) {
                     float ddx = points[i].x - points[j].x;
                     float ddy = points[i].y - points[j].y;
-                    if (ddx * ddx + ddy * ddy < t2) {
-                        matrix[static_cast<size_t>(i) * n + j] = 1;
+                    if (j != i && ddx * ddx + ddy * ddy < threshold * threshold) {
+                        matrix[i * n + j] = 1;
                     }
                 }
             }
@@ -387,7 +309,7 @@ std::vector<char> buildIncidenceMatrix(const std::vector<GPoint>& points,
 
 std::vector<Cluster> waveClusters(const std::vector<GPoint>& points,
                                   const std::vector<char>& matrix) {
-    const int n = static_cast<int>(points.size());
+    int n = points.size();
     // a[i] = 0 - волна до точки не дошла; a[i] = k - дошла на шаге k.
     std::vector<int> a(n, 0);
     std::vector<Cluster> clusters;
@@ -396,28 +318,28 @@ std::vector<Cluster> waveClusters(const std::vector<GPoint>& points,
 
     for (int k = 0; k < n; ++k) {
         if (a[k] != 0) {
-            continue;
+            continue; // точка уже в каком-то кластере
         }
         // Поджигаем точку k - начинается новый кластер.
         Cluster cl;
         a[k] = 1;
-        current.assign(1, k);
+        current.clear();
+        current.push_back(k);
         cl.points.push_back(k);
         int step = 1;
 
         while (!current.empty()) {
             next.clear();
             for (int i : current) {
-                const char* row = &matrix[static_cast<size_t>(i) * n];
                 for (int j = 0; j < n; ++j) {
-                    if (row[j] && a[j] == 0) {
+                    if (matrix[i * n + j] == 1 && a[j] == 0) {
                         a[j] = step + 1;
                         next.push_back(j);
                         cl.points.push_back(j);
                     }
                 }
             }
-            current.swap(next); // следующий шаг становится текущим
+            current = next; // следующий шаг становится текущим
             ++step;
         }
 
@@ -425,72 +347,55 @@ std::vector<Cluster> waveClusters(const std::vector<GPoint>& points,
         clusters.push_back(cl);
     }
 
-    sortClustersBySize(clusters);
+    std::sort(clusters.begin(), clusters.end(), biggerCluster);
     return clusters;
 }
 
 // --- Минимальное покрывающее дерево ---
 
-static float dist2(const GPoint& p, const GPoint& q) {
+// Квадрат расстояния между точками (корень извлекаем только в конце).
+float dist2(const GPoint& p, const GPoint& q) {
     float dx = p.x - q.x;
     float dy = p.y - q.y;
     return dx * dx + dy * dy;
 }
 
 std::vector<Edge> buildSpanningTree(const std::vector<GPoint>& points) {
-    const int n = static_cast<int>(points.size());
+    int n = points.size();
     std::vector<Edge> edges;
-    if (n < 2) {
-        return edges;
-    }
 
-    // База: самое короткое ребро из всех пар точек.
-    int a0 = 0;
-    int b0 = 1;
-    float best = dist2(points[0], points[1]);
-    for (int i = 0; i < n; ++i) {
-        for (int j = i + 1; j < n; ++j) {
-            float d = dist2(points[i], points[j]);
-            if (d < best) {
-                best = d;
-                a0 = i;
-                b0 = j;
-            }
-        }
-    }
+    std::vector<bool> inTree(n, false);
+    std::vector<float> d(n);  // квадрат расстояния от точки до дерева
+    std::vector<int> from(n); // ближайшая к точке вершина дерева
 
-    std::vector<char> inTree(n, 0);
-    std::vector<float> d(n);    // квадрат расстояния от точки до дерева
-    std::vector<int> from(n);   // ближайшая к точке вершина дерева
-    inTree[a0] = inTree[b0] = 1;
-    edges.push_back({a0, b0, std::sqrt(best)});
-
+    // Начинаем дерево с точки 0.
+    inTree[0] = true;
     for (int v = 0; v < n; ++v) {
-        float da = dist2(points[v], points[a0]);
-        float db = dist2(points[v], points[b0]);
-        d[v] = std::min(da, db);
-        from[v] = (da < db) ? a0 : b0;
+        d[v] = dist2(points[v], points[0]);
+        from[v] = 0;
     }
 
-    // Шаг: присоединяем ближайшую к дереву точку, пока рёбер не n-1.
-    while (static_cast<int>(edges.size()) < n - 1) {
+    // Присоединяем ближайшую к дереву точку, пока рёбер не станет n-1.
+    while ((int)edges.size() < n - 1) {
         int v = -1;
         for (int u = 0; u < n; ++u) {
-            if (!inTree[u] && (v < 0 || d[u] < d[v])) {
+            if (!inTree[u] && (v == -1 || d[u] < d[v])) {
                 v = u;
             }
         }
-        inTree[v] = 1;
-        edges.push_back({from[v], v, std::sqrt(d[v])});
+        inTree[v] = true;
 
-        // Расстояние до дерева могло уменьшиться за счёт новой вершины.
+        Edge e;
+        e.a = from[v];
+        e.b = v;
+        e.len = std::sqrt(d[v]);
+        edges.push_back(e);
+
+        // Новая вершина могла оказаться ближе к остальным точкам.
         for (int u = 0; u < n; ++u) {
-            if (!inTree[u]) {
-                float du = dist2(points[u], points[v]);
-                if (du < d[u]) {
-                    d[u] = du;
-                    from[u] = v;
-                }
+            if (!inTree[u] && dist2(points[u], points[v]) < d[u]) {
+                d[u] = dist2(points[u], points[v]);
+                from[u] = v;
             }
         }
     }
@@ -501,8 +406,11 @@ std::vector<int> edgeHistogram(const std::vector<Edge>& edges,
                                int bins, float maxLen) {
     std::vector<int> hist(bins, 0);
     for (const Edge& e : edges) {
-        int k = static_cast<int>(e.len / maxLen * bins);
-        hist[std::min(k, bins - 1)]++;
+        int k = (int)(e.len / maxLen * bins);
+        if (k > bins - 1) {
+            k = bins - 1; // очень длинные рёбра - в последний столбец
+        }
+        hist[k]++;
     }
     return hist;
 }
@@ -511,14 +419,14 @@ void writeHistogram(const std::vector<int>& hist, float maxLen,
                     float threshold, const std::string& dataFilename,
                     const std::string& scriptFilename,
                     const std::string& imageFilename) {
-    const float width = maxLen / hist.size();
+    float width = maxLen / hist.size(); // ширина одного столбца
     std::ofstream data(dataFilename);
-    for (size_t k = 0; k < hist.size(); ++k) {
+    for (int k = 0; k < (int)hist.size(); ++k) {
         data << (k + 0.5f) * width << " " << hist[k] << "\n";
     }
 
     std::ofstream out(scriptFilename);
-    out << "reset\n"; // сбросить настройки, оставшиеся от прошлого скрипта
+    out << "reset\n";
     out << "set terminal png size 900,600\n";
     out << "set output '" << imageFilename << "'\n";
     out << "set title 'Гистограмма длин рёбер покрывающего дерева'\n";
@@ -539,33 +447,34 @@ void writeHistogram(const std::vector<int>& hist, float maxLen,
 std::vector<Cluster> treeClusters(const std::vector<GPoint>& points,
                                   const std::vector<Edge>& edges,
                                   float threshold) {
-    const int n = static_cast<int>(points.size());
+    int n = points.size();
 
-    // Оставляем только рёбра не длиннее порога.
-    std::vector<std::vector<int>> adj(n);
+    // Для каждой точки - список соседей по рёбрам не длиннее порога.
+    std::vector<std::vector<int>> neighbours(n);
     for (const Edge& e : edges) {
         if (e.len <= threshold) {
-            adj[e.a].push_back(e.b);
-            adj[e.b].push_back(e.a);
+            neighbours[e.a].push_back(e.b);
+            neighbours[e.b].push_back(e.a);
         }
     }
 
     // Обходим оставшиеся куски дерева, каждый кусок - кластер.
-    std::vector<char> seen(n, 0);
+    std::vector<bool> seen(n, false);
     std::vector<Cluster> clusters;
     for (int k = 0; k < n; ++k) {
         if (seen[k]) {
             continue;
         }
         Cluster cl;
-        std::vector<int> queue(1, k);
-        seen[k] = 1;
-        for (size_t q = 0; q < queue.size(); ++q) {
+        std::vector<int> queue;
+        queue.push_back(k);
+        seen[k] = true;
+        for (int q = 0; q < (int)queue.size(); ++q) {
             int v = queue[q];
             cl.points.push_back(v);
-            for (int u : adj[v]) {
+            for (int u : neighbours[v]) {
                 if (!seen[u]) {
-                    seen[u] = 1;
+                    seen[u] = true;
                     queue.push_back(u);
                 }
             }
@@ -574,6 +483,6 @@ std::vector<Cluster> treeClusters(const std::vector<GPoint>& points,
         clusters.push_back(cl);
     }
 
-    sortClustersBySize(clusters);
+    std::sort(clusters.begin(), clusters.end(), biggerCluster);
     return clusters;
 }
