@@ -5,6 +5,7 @@
 #ifndef FUNCTIONS_H
 #define FUNCTIONS_H
 
+#include <cstddef> // size_t
 #include <vector>
 
 // Общий интерфейс для всех видов статистики. Чисто виртуальные функции
