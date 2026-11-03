@@ -1,0 +1,4 @@
+gen
+test
+kmeans
+exit

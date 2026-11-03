@@ -1,0 +1,5 @@
+gen
+test
+wave
+dbscan 3 4 5 6
+exit
