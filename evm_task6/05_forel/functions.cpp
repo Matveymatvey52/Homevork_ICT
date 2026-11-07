@@ -454,6 +454,11 @@ void Plotter::groups(const Field& field, const std::vector<int>& labels,
     out << "set xrange [" << FIELD_MIN << ":" << FIELD_MAX << "]\n";
     out << "set yrange [" << FIELD_MIN << ":" << FIELD_MAX << "]\n";
     out << "unset key\n";
+    // нет центров (картинка волны) - рисуем только точки
+    if (centers.empty()) {
+        out << "plot '" << name << "_points.txt' using 1:2:3 with points pt 7 ps 0.5 lc rgb variable\n";
+        return;
+    }
     out << "plot '" << name << "_points.txt' using 1:2:3 with points pt 7 ps 0.5 lc rgb variable, \\\n";
     out << "     '" << name << "_centers.txt' using 1:2:3 with circles lc rgb '#555555' lw 1, \\\n";
     out << "     '" << name << "_centers.txt' using 1:2 with points pt 3 ps 2 lw 2 lc rgb 'black'\n";
